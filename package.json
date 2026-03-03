@@ -1,7 +1,7 @@
 {
-  "name": "tsr-trading-bot",
+  "name": "trading-bot",
   "version": "1.0.0",
-  "description": "TSR Trading Bot for Hyperliquid",
+  "description": "Trading Bot for Hyperliquid",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
