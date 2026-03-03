@@ -1,11 +1,11 @@
 const express = require('express');
-const TSRBot = require('./tsrBot');
+const PositionBot = require('./positionBot');
 const config = require('./config');
 
 const app = express();
 app.use(express.json());
 
-const bot = new TSRBot();
+const bot = new PositionBot();
 
 // Recevoir les webhooks Discord
 app.post('/webhook/tradingview', (req, res) => {
