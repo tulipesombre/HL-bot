@@ -1,0 +1,360 @@
+const axios = require('axios');
+const crypto = require('crypto');
+const config = require('./config');
+
+class TSRBot {
+  constructor() {
+    this.waitingTrades = [];      // S1/S2 en attente de CHOD
+    this.activeTrades = {};       // Trades ouverts
+    this.dailyLoss = 0;
+    this.accountBalance = 10000;  // À récupérer depuis Hyperliquid
+  }
+
+  // ==================== 1. RECEVOIR L'ALERTE ====================
+  async handleDiscordAlert(embed) {
+    try {
+      const setup = this.parseDiscordEmbed(embed);
+      
+      console.log(`\n📨 SETUP ARMÉ!`);
+      console.log(`   Symbol: ${setup.ticker}`);
+      console.log(`   Direction: ${setup.direction}`);
+      console.log(`   Setup: ${setup.setup}`);
+      console.log(`   DR: ${setup.dr_status}`);
+
+      // Ajouter à la queue
+      this.waitingTrades.push({
+        symbol: setup.ticker,
+        direction: setup.direction,
+        setup: setup.setup,
+        dr_status: setup.dr_status,
+        armed_at: Date.now(),
+        deadline: Date.now() + (config.trading.setupDeadlineMin * 60 * 1000),
+        entry_triggered: false
+      });
+
+      // Log Discord
+      await this.logToDiscord({
+        title: '✅ SETUP REÇU',
+        ticker: setup.ticker,
+        direction: setup.direction,
+        setup: setup.setup,
+        color: setup.direction === 'LONG' ? '00ff00' : 'ff0000'
+      });
+
+    } catch (error) {
+      console.error('❌ Erreur parsing alert:', error.message);
+    }
+  }
+
+  // Parser l'embed Discord
+  parseDiscordEmbed(embed) {
+    const fields = {};
+    embed.fields?.forEach(f => {
+      fields[f.name] = f.value;
+    });
+
+    return {
+      ticker: fields['ticker']?.replace('USDT', '') || fields['Ticker'] || '',
+      direction: fields['Direction']?.includes('LONG') ? 'LONG' : 'SHORT',
+      setup: fields['Setup'] || '',
+      dr_status: fields['DR Detail'] || 'NO_DR'
+    };
+  }
+
+  // ==================== 2. DETECTER CHOD M5 ====================
+  async checkForChod() {
+    if (this.waitingTrades.length === 0) return;
+
+    for (let i = this.waitingTrades.length - 1; i >= 0; i--) {
+      const trade = this.waitingTrades[i];
+
+      try {
+        // Check deadline
+        if (Date.now() > trade.deadline) {
+          console.log(`⏰ SETUP EXPIRÉ: ${trade.symbol}`);
+          await this.logToDiscord({
+            title: '⏰ SETUP EXPIRÉ',
+            ticker: trade.symbol,
+            reason: 'Deadline 121 min écoulée',
+            color: 'ff8800'
+          });
+          this.waitingTrades.splice(i, 1);
+          continue;
+        }
+
+        // Récupérer les bougies M5
+        const candles = await this.getCandles(trade.symbol, '5m', 5);
+        if (!candles || candles.length < 2) continue;
+
+        // Détecter CHOD
+        const chod = this.detectChod(candles, trade.direction);
+
+        if (chod && !trade.entry_triggered) {
+          console.log(`\n🚀 CHOD DÉTECTÉ: ${trade.symbol}`);
+          trade.entry_triggered = true;
+
+          // EXÉCUTER
+          await this.executeTrade({
+            ...trade,
+            ...chod
+          });
+
+          // Retirer de la queue
+          this.waitingTrades.splice(i, 1);
+        }
+
+      } catch (error) {
+        console.error(`❌ Erreur CHOD ${trade.symbol}:`, error.message);
+      }
+    }
+  }
+
+  // ==================== 3. RÉCUPÉRER LES CANDLES ====================
+  async getCandles(symbol, interval, limit = 5) {
+    try {
+      const response = await axios.post(`${config.hyperliquid.baseUrl}/info`, {
+        type: 'candles',
+        req: {
+          coin: symbol,
+          interval: interval,
+          startTime: Date.now() - (limit * 5 * 60 * 1000), // 5 min bars
+          dir: 'Next'
+        }
+      });
+
+      return response.data || [];
+
+    } catch (error) {
+      console.error(`Erreur candles ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // ==================== 4. DÉTECTER CHOD ====================
+  detectChod(candles, direction) {
+    if (candles.length < 2) return null;
+
+    // Candle actuelle = réalisation, précédente = origine
+    const current = candles[candles.length - 1];
+    const previous = candles[candles.length - 2];
+
+    // Parser les candles (format Hyperliquid: [timestamp, close, high, low, volume, ...])
+    const currentCandle = {
+      close: current[1],
+      high: current[2],
+      low: current[3]
+    };
+    const previousCandle = {
+      close: previous[1],
+      high: previous[2],
+      low: previous[3]
+    };
+
+    // SHORT: close passe SOUS le low précédent
+    if (direction === 'SHORT') {
+      if (currentCandle.close < previousCandle.low) {
+        // SL = HIGH le plus élevé
+        const sl = Math.max(previousCandle.high, currentCandle.high);
+        
+        return {
+          entry_price: currentCandle.close,
+          sl_price: sl,
+          origin_level: previousCandle.low,
+          realization_level: currentCandle.close,
+          chod_detected: true
+        };
+      }
+    }
+    // LONG: close passe AU-DESSUS du high précédent
+    else if (direction === 'LONG') {
+      if (currentCandle.close > previousCandle.high) {
+        // SL = LOW le plus bas
+        const sl = Math.min(previousCandle.low, currentCandle.low);
+        
+        return {
+          entry_price: currentCandle.close,
+          sl_price: sl,
+          origin_level: previousCandle.high,
+          realization_level: currentCandle.close,
+          chod_detected: true
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // ==================== 5. EXÉCUTER LE TRADE ====================
+  async executeTrade(tradeData) {
+    try {
+      // Calculer size (5% du compte)
+      const size = this.calculatePositionSize(
+        tradeData.entry_price,
+        tradeData.sl_price,
+        this.accountBalance
+      );
+
+      // TP = 2R
+      const risk = Math.abs(tradeData.entry_price - tradeData.sl_price);
+      const tp = tradeData.direction === 'LONG'
+        ? tradeData.entry_price + (risk * 2)
+        : tradeData.entry_price - (risk * 2);
+
+      console.log(`\n💰 EXÉCUTION`);
+      console.log(`   Symbol: ${tradeData.symbol}`);
+      console.log(`   Direction: ${tradeData.direction}`);
+      console.log(`   Entry: ${tradeData.entry_price.toFixed(6)}`);
+      console.log(`   SL: ${tradeData.sl_price.toFixed(6)}`);
+      console.log(`   TP: ${tp.toFixed(6)}`);
+      console.log(`   Size: ${size.toFixed(4)}`);
+      console.log(`   Risk/Reward: 1:2`);
+
+      // Placer l'ordre (TODO: implémentation réelle Hyperliquid)
+      const order = await this.placeOrder({
+        symbol: tradeData.symbol,
+        direction: tradeData.direction,
+        size: size,
+        entry: tradeData.entry_price
+      });
+
+      // Sauvegarder la position
+      this.activeTrades[tradeData.symbol] = {
+        orderId: order.id,
+        symbol: tradeData.symbol,
+        direction: tradeData.direction,
+        entry: tradeData.entry_price,
+        size: size,
+        sl: tradeData.sl_price,
+        tp: tp,
+        opened_at: Date.now(),
+        setup: tradeData.setup
+      };
+
+      // Log Discord
+      await this.logToDiscord({
+        title: `✅ TRADE EXÉCUTÉ`,
+        ticker: tradeData.symbol,
+        direction: tradeData.direction,
+        entry: tradeData.entry_price.toFixed(6),
+        sl: tradeData.sl_price.toFixed(6),
+        tp: tp.toFixed(6),
+        size: size.toFixed(4),
+        color: tradeData.direction === 'LONG' ? '00ff00' : 'ff0000'
+      });
+
+    } catch (error) {
+      console.error(`❌ Erreur exécution ${tradeData.symbol}:`, error.message);
+      await this.logToDiscord({
+        title: '❌ ERREUR EXÉCUTION',
+        ticker: tradeData.symbol,
+        error: error.message,
+        color: 'ff0000'
+      });
+    }
+  }
+
+  // Calculer la size
+  calculatePositionSize(entry, sl, balance) {
+    const riskAmount = balance * (config.trading.riskPercent / 100);
+    const riskPerUnit = Math.abs(entry - sl);
+    
+    if (riskPerUnit === 0) return 0;
+    return riskAmount / riskPerUnit;
+  }
+
+  // Placer l'ordre (placeholder)
+  async placeOrder(params) {
+    console.log('📤 Ordre placeholder:', params);
+    return { id: 'ORDER_' + Date.now() };
+  }
+
+  // ==================== 6. MONITORER SL/TP ====================
+  async monitorPositions() {
+    for (let [symbol, position] of Object.entries(this.activeTrades)) {
+      try {
+        const price = await this.getCurrentPrice(symbol);
+        if (!price) continue;
+
+        // Check TP
+        if (position.direction === 'LONG' && price >= position.tp) {
+          await this.closePosition(symbol, 'TP_HIT', price);
+          delete this.activeTrades[symbol];
+        } else if (position.direction === 'SHORT' && price <= position.tp) {
+          await this.closePosition(symbol, 'TP_HIT', price);
+          delete this.activeTrades[symbol];
+        }
+
+        // Check SL
+        if (position.direction === 'LONG' && price <= position.sl) {
+          await this.closePosition(symbol, 'SL_HIT', price);
+          delete this.activeTrades[symbol];
+        } else if (position.direction === 'SHORT' && price >= position.sl) {
+          await this.closePosition(symbol, 'SL_HIT', price);
+          delete this.activeTrades[symbol];
+        }
+
+      } catch (error) {
+        console.error(`Erreur monitoring ${symbol}:`, error.message);
+      }
+    }
+  }
+
+  async getCurrentPrice(symbol) {
+    try {
+      const response = await axios.post(`${config.hyperliquid.baseUrl}/info`, {
+        type: 'lastPrice',
+        coin: symbol
+      });
+      return response.data?.price || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async closePosition(symbol, reason, price) {
+    const position = this.activeTrades[symbol];
+    const pnl = position.direction === 'LONG'
+      ? (price - position.entry) * position.size
+      : (position.entry - price) * position.size;
+
+    console.log(`\n📊 FERMÉ - ${reason}`);
+    console.log(`   Symbol: ${symbol}`);
+    console.log(`   P&L: $${pnl.toFixed(2)}`);
+
+    await this.logToDiscord({
+      title: `📊 FERMÉ - ${reason}`,
+      ticker: symbol,
+      pnl: `$${pnl.toFixed(2)}`,
+      color: pnl >= 0 ? '00ff00' : 'ff0000'
+    });
+  }
+
+  // ==================== 7. LOGS DISCORD ====================
+  async logToDiscord(data) {
+    if (!config.discord.webhookUrl) return;
+
+    try {
+      await axios.post(config.discord.webhookUrl, {
+        username: 'TSR Bot',
+        embeds: [{
+          title: data.title,
+          color: parseInt(data.color || 'ffffff', 16),
+          fields: [
+            { name: 'Symbol', value: data.ticker || 'N/A', inline: true },
+            { name: 'Direction', value: data.direction || 'N/A', inline: true },
+            { name: 'Entry', value: data.entry || 'N/A', inline: true },
+            { name: 'SL', value: data.sl || 'N/A', inline: true },
+            { name: 'TP', value: data.tp || 'N/A', inline: true },
+            { name: 'Size', value: data.size || 'N/A', inline: true },
+            { name: 'P&L', value: data.pnl || 'N/A', inline: true }
+          ],
+          timestamp: new Date()
+        }]
+      });
+    } catch (error) {
+      console.error('Erreur Discord:', error.message);
+    }
+  }
+}
+
+module.exports = TSRBot;
