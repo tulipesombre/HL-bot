@@ -20,29 +20,16 @@ def _clients():
     info = Info(base_url=BASE_URL, skip_ws=True)
     return exchange, info, account.address
 
-
 def get_balance() -> float:
     _, info, address = _clients()
-    # Perps balance
     state = info.user_state(address)
-    perps = float(state.get("crossMarginSummary", {}).get("accountValue", 0))
-    # Spot balance (USDC)
-    try:
-        spot_state = info.spot_user_state(address)
-        spot_usdc = sum(
-            float(b["hold"]) + float(b["total"])
-            for b in spot_state.get("balances", [])
-            if b.get("coin") == "USDC"
-        )
-    except Exception:
-        spot_usdc = 0.0
-    return perps + spot_usdc
+    summary = state.get("crossMarginSummary") or state.get("marginSummary", {})
+    return float(summary.get("accountValue", 0))
 
 def get_positions() -> list:
     _, info, address = _clients()
     state = info.user_state(address)
     return [p for p in state["assetPositions"] if float(p["position"]["szi"]) != 0]
-
 
 def _extract_oid(order_result: dict) -> int | None:
     """Extrait l'OID d'une réponse d'ordre HL."""
