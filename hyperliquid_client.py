@@ -22,9 +22,12 @@ def _clients():
 
 def get_balance() -> float:
     _, info, address = _clients()
-    state = info.user_state(address)
-    summary = state.get("crossMarginSummary") or state.get("marginSummary", {})
-    return float(summary.get("accountValue", 0))
+    try:
+        spot = info.spot_user_state(address)
+        logger.info(f"DEBUG spot_user_state: {spot}")
+    except Exception as e:
+        logger.info(f"DEBUG spot_user_state error: {e}")
+    return 0.0
 
 def get_positions() -> list:
     _, info, address = _clients()
