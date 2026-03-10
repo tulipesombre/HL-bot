@@ -23,13 +23,20 @@ def _clients():
 
 def get_balance() -> float:
     _, info, address = _clients()
+    # Perps balance
     state = info.user_state(address)
-    logger.info(f"DEBUG user_state keys: {list(state.keys())}")
-    logger.info(f"DEBUG marginSummary: {state.get('marginSummary')}")
-    logger.info(f"DEBUG crossMarginSummary: {state.get('crossMarginSummary')}")
-    summary = state.get("crossMarginSummary") or state.get("marginSummary", {})
-    return float(summary.get("accountValue", 0))
-
+    perps = float(state.get("crossMarginSummary", {}).get("accountValue", 0))
+    # Spot balance (USDC)
+    try:
+        spot_state = info.spot_user_state(address)
+        spot_usdc = sum(
+            float(b["hold"]) + float(b["total"])
+            for b in spot_state.get("balances", [])
+            if b.get("coin") == "USDC"
+        )
+    except Exception:
+        spot_usdc = 0.0
+    return perps + spot_usdc
 
 def get_positions() -> list:
     _, info, address = _clients()
