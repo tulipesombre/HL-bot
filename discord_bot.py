@@ -266,6 +266,7 @@ async def resume_bot(interaction: discord.Interaction):
 
 @bot.tree.command(name="positions", description="Afficher les positions ouvertes")
 async def show_positions(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
         loop = asyncio.get_running_loop()
@@ -304,6 +305,7 @@ async def show_positions(interaction: discord.Interaction):
 
 @bot.tree.command(name="balance", description="Afficher le solde du compte Hyperliquid")
 async def show_balance(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
         loop = asyncio.get_running_loop()
