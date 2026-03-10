@@ -12,13 +12,14 @@ BASE_URL = "https://api.hyperliquid.xyz"
 # { coin: { "sl_oid": int, "tp_oid": int, "entry": float, "is_long": bool, "size": float, "tp": float } }
 open_orders: dict = {}
 
-
 def _clients():
     pk = os.environ["HL_PRIVATE_KEY"]
     account = eth_account.Account.from_key(pk)
     exchange = Exchange(account, base_url=BASE_URL)
     info = Info(base_url=BASE_URL, skip_ws=True)
-    return exchange, info, account.address
+    # Adresse principale pour les requêtes info, API wallet pour les trades
+    main_address = os.environ.get("HL_WALLET_ADDRESS", account.address)
+    return exchange, info, main_address
 
 def get_balance() -> float:
     _, info, address = _clients()
