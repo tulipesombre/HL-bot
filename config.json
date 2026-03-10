@@ -10,7 +10,7 @@
     "SOL": true,
     "HYPE": true,
     "BNB": true,
-  }
+  },
   "dr_filter": "off",
   "max_leverage": 40,
   "bot_active": true
