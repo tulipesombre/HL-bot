@@ -23,9 +23,10 @@ def _clients():
 
 def get_balance() -> float:
     _, info, address = _clients()
-    logger.info(f"DEBUG address: {address}")
     spot = info.spot_user_state(address)
-    logger.info(f"DEBUG spot: {spot}")
+    for b in spot.get("balances", []):
+        if b["coin"] == "USDC":
+            return float(b["total"])
     return 0.0
 
 def get_positions() -> list:
