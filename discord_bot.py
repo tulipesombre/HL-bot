@@ -41,7 +41,6 @@ def get_channel_for_ticker(ticker: str):
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-
 # ════════════════════════════════════════════════════════════
 # EVENTS
 # ════════════════════════════════════════════════════════════
@@ -55,7 +54,6 @@ async def on_ready():
         logger.info(f"{len(synced)} commandes slash synchronisées")
     except Exception as e:
         logger.error(f"Erreur sync slash: {e}")
-
 
 # ════════════════════════════════════════════════════════════
 # BOUTONS INTERACTIFS — TRADE
@@ -106,7 +104,6 @@ class TradeView(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Exception : {e}", ephemeral=True)
 
-
 # ════════════════════════════════════════════════════════════
 # FONCTIONS D'ENVOI (appelées depuis webhook.py via threadsafe)
 # ════════════════════════════════════════════════════════════
@@ -126,7 +123,6 @@ async def send_setup_armed(payload: dict, ticker: str = ""):
         await channel.send(embed=embed)
     except Exception as e:
         logger.error(f"Erreur send_setup_armed: {e}")
-
 
 async def send_trade_opened(trade: dict, pos: dict, calc: dict):
     """Notification position ouverte avec boutons interactifs."""
@@ -160,7 +156,6 @@ async def send_trade_opened(trade: dict, pos: dict, calc: dict):
     view = TradeView(coin)
     await channel.send(embed=embed, view=view)
 
-
 async def send_trade_blocked(reason: str, ticker: str, setup: str, direction: str):
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
@@ -174,14 +169,12 @@ async def send_trade_blocked(reason: str, ticker: str, setup: str, direction: st
     embed.add_field(name="Direction", value=direction, inline=True)
     await channel.send(embed=embed)
 
-
 async def send_error(message: str):
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         return
     embed = discord.Embed(title="⚠️  Erreur bot", description=message, color=0xff9800)
     await channel.send(embed=embed)
-
 
 # ════════════════════════════════════════════════════════════
 # SLASH COMMANDS — CONFIG
@@ -204,7 +197,6 @@ async def config_show(interaction: discord.Interaction):
     embed.add_field(name="🔛 Bot",         value="✅ Actif" if cfg["bot_active"] else "⏸️ Pause", inline=True)
     embed.add_field(name="📡 Assets",      value=assets,                                       inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 @bot.tree.command(name="set", description="Modifier un paramètre de configuration")
 @app_commands.describe(param="Paramètre", value="Nouvelle valeur")
@@ -244,7 +236,6 @@ async def set_param(interaction: discord.Interaction, param: str, value: str):
     except Exception as e:
         await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
 
-
 @bot.tree.command(name="toggle_asset", description="Activer / désactiver un asset")
 @app_commands.choices(asset=[
     app_commands.Choice(name="BTC",  value="BTC"),
@@ -260,7 +251,6 @@ async def toggle_asset(interaction: discord.Interaction, asset: str):
     state = "✅ activé" if cfg["assets"][asset] else "❌ désactivé"
     await interaction.response.send_message(f"**{asset}** {state}", ephemeral=True)
 
-
 @bot.tree.command(name="pause", description="Mettre le bot en pause (aucun trade)")
 async def pause_bot(interaction: discord.Interaction):
     from config_manager import set_val
@@ -274,24 +264,20 @@ async def resume_bot(interaction: discord.Interaction):
     set_val("bot_active", True)
     await interaction.response.send_message("▶️ Bot **actif** — les trades reprennent")
 
-
 @bot.tree.command(name="positions", description="Afficher les positions ouvertes")
 async def show_positions(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         positions = await loop.run_in_executor(None, hl.get_positions)
         balance   = await loop.run_in_executor(None, hl.get_balance)
-        # ... reste inchangé
 
         if not positions:
-            await interaction.followup.send("📭 Aucune position ouverte", ephemeral=True)
+            await interaction.response.send_message("📭 Aucune position ouverte", ephemeral=True)
             return
 
         embed = discord.Embed(title="📊  Positions ouvertes", color=0x7289da)
         embed.add_field(name="💰 Balance", value=f"${balance:,.2f} USDC", inline=False)
-
         for p in positions:
             pos     = p["position"]
             coin    = pos["coin"]
@@ -312,22 +298,22 @@ async def show_positions(interaction: discord.Interaction):
                 ),
                 inline=True,
             )
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
-
+        await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
 
 @bot.tree.command(name="balance", description="Afficher le solde du compte Hyperliquid")
 async def show_balance(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         balance = await loop.run_in_executor(None, hl.get_balance)
-        await interaction.followup.send(f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True)
+        await interaction.response.send_message(
+            f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True
+        )
     except Exception as e:
-        await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
-
+        await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+        
 @bot.tree.command(name="add_asset", description="Ajouter un asset à trader")
 @app_commands.describe(
     ticker="Ticker TradingView (ex: SOLUSDT.P)",
