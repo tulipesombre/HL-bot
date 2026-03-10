@@ -270,11 +270,11 @@ async def show_positions(interaction: discord.Interaction):
     try:
         import hyperliquid_client as hl
         loop = asyncio.get_running_loop()
-        positions = await loop.run_in_executor(None, hl.get_positions)
-        balance   = await loop.run_in_executor(None, hl.get_balance)
+        positions = await asyncio.wait_for(loop.run_in_executor(None, hl.get_positions), timeout=8.0)
+        balance   = await asyncio.wait_for(loop.run_in_executor(None, hl.get_balance),   timeout=8.0)
 
         if not positions:
-            await interaction.response.send_message("📭 Aucune position ouverte", ephemeral=True)
+            await interaction.followup.send("📭 Aucune position ouverte", ephemeral=True)
             return
 
         embed = discord.Embed(title="📊  Positions ouvertes", color=0x7289da)
@@ -291,17 +291,12 @@ async def show_positions(interaction: discord.Interaction):
             pnl_ico = "✅" if upnl >= 0 else "🔴"
             embed.add_field(
                 name=f"{coin}  {dir_txt}",
-                value=(
-                    f"Entry : `{entry:,.4f}`\n"
-                    f"Size  : `{abs(szi)}`\n"
-                    f"PnL   : {pnl_ico} `${upnl:,.2f}`\n"
-                    f"Levier: `{lev}x`"
-                ),
+                value=f"Entry : `{entry:,.4f}`\nSize  : `{abs(szi)}`\nPnL   : {pnl_ico} `${upnl:,.2f}`\nLevier: `{lev}x`",
                 inline=True,
             )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+        await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
 
 @bot.tree.command(name="balance", description="Afficher le solde du compte Hyperliquid")
 async def show_balance(interaction: discord.Interaction):
