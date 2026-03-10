@@ -1,6 +1,0 @@
-# Fichier: .gitignore
-.env
-.env.local
-.env.*.local
-node_modules/
-bot.log
