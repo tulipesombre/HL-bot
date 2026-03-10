@@ -281,8 +281,10 @@ async def show_positions(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
-        positions = hl.get_positions()
-        balance   = hl.get_balance()
+        loop = asyncio.get_event_loop()
+        positions = await loop.run_in_executor(None, hl.get_positions)
+        balance   = await loop.run_in_executor(None, hl.get_balance)
+        # ... reste inchangé
 
         if not positions:
             await interaction.followup.send("📭 Aucune position ouverte", ephemeral=True)
@@ -321,11 +323,11 @@ async def show_balance(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
         import hyperliquid_client as hl
-        balance = hl.get_balance()
+        loop = asyncio.get_event_loop()
+        balance = await loop.run_in_executor(None, hl.get_balance)
         await interaction.followup.send(f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
-
 
 @bot.tree.command(name="add_asset", description="Ajouter un asset à trader")
 @app_commands.describe(
