@@ -24,7 +24,9 @@ def _clients():
 def get_balance() -> float:
     _, info, address = _clients()
     state = info.user_state(address)
-    return float(state["marginSummary"]["accountValue"])
+    # Unified account → crossMarginSummary, sinon marginSummary
+    summary = state.get("crossMarginSummary") or state.get("marginSummary", {})
+    return float(summary.get("accountValue", 0))
 
 
 def get_positions() -> list:
