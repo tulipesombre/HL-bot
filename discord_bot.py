@@ -309,12 +309,15 @@ async def show_balance(interaction: discord.Interaction):
     try:
         import hyperliquid_client as hl
         loop = asyncio.get_running_loop()
-        balance = await loop.run_in_executor(None, hl.get_balance)
-        await interaction.response.send_message(
-            f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True
+        balance = await asyncio.wait_for(
+            loop.run_in_executor(None, hl.get_balance),
+            timeout=10.0
         )
+        await interaction.followup.send(f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True)
+    except asyncio.TimeoutError:
+        await interaction.followup.send("❌ Timeout — Hyperliquid ne répond pas", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+        await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
         
 @bot.tree.command(name="add_asset", description="Ajouter un asset à trader")
 @app_commands.describe(
