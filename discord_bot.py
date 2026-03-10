@@ -19,13 +19,22 @@ ASSET_CHANNELS = {
     "ETH":  int(os.environ.get("DISCORD_CHANNEL_ETH",  0)),
     "SOL":  int(os.environ.get("DISCORD_CHANNEL_SOL",  0)),
     "HYPE": int(os.environ.get("DISCORD_CHANNEL_HYPE", 0)),
-    "BNB":  int(os.environ.get("DISCORD_CHANNEL_BNB", 0)),
 }
 
 def get_channel_for_ticker(ticker: str):
     """Retourne le channel Discord pour un ticker donné, ou le channel par défaut."""
+    from config_manager import load
+    cfg = load()
+    # Channels stockés dans config.json (ajoutés via /add_asset)
+    asset_channels_cfg = cfg.get("asset_channels", {})
+    ticker_upper = ticker.upper()
+    # Cherche dans les channels de la config
+    for coin, ch_id in asset_channels_cfg.items():
+        if coin in ticker_upper and ch_id:
+            return bot.get_channel(int(ch_id))
+    # Cherche dans les variables d environnement
     for coin, ch_id in ASSET_CHANNELS.items():
-        if coin in ticker.upper() and ch_id:
+        if coin in ticker_upper and ch_id:
             return bot.get_channel(ch_id)
     return bot.get_channel(CHANNEL_ID)
 
@@ -240,7 +249,6 @@ async def set_param(interaction: discord.Interaction, param: str, value: str):
     app_commands.Choice(name="ETH",  value="ETH"),
     app_commands.Choice(name="SOL",  value="SOL"),
     app_commands.Choice(name="HYPE", value="HYPE"),
-    app_commands.Choice(name="BNB",  value="BNB"),
 ])
 async def toggle_asset(interaction: discord.Interaction, asset: str):
     from config_manager import load, save
@@ -314,3 +322,53 @@ async def show_balance(interaction: discord.Interaction):
         await interaction.followup.send(f"💰 Balance : **${balance:,.2f} USDC**", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
+
+
+@bot.tree.command(name="add_asset", description="Ajouter un asset à trader")
+@app_commands.describe(
+    ticker="Ticker TradingView (ex: SOLUSDT.P)",
+    channel="Mention du channel Discord dédié (ex: #sol)"
+)
+async def add_asset_cmd(interaction: discord.Interaction, ticker: str, channel: discord.TextChannel = None):
+    from risk_manager import add_asset
+    ch_id = channel.id if channel else 0
+    result = add_asset(ticker.upper(), ch_id)
+    coin = result["coin"]
+    ch_txt = channel.mention if channel else "channel par défaut"
+    embed = discord.Embed(title="✅ Asset ajouté", color=0x00e676)
+    embed.add_field(name="Ticker",   value=ticker.upper(), inline=True)
+    embed.add_field(name="Coin",     value=coin,           inline=True)
+    embed.add_field(name="Channel",  value=ch_txt,         inline=True)
+    embed.set_footer(text="Utilise /toggle_asset pour activer/désactiver")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="remove_asset", description="Supprimer un asset de la liste")
+@app_commands.describe(coin="Nom du coin (ex: SOL)")
+async def remove_asset_cmd(interaction: discord.Interaction, coin: str):
+    from risk_manager import remove_asset
+    remove_asset(coin.upper())
+    await interaction.response.send_message(
+        f"🗑️ **{coin.upper()}** supprimé de la liste des assets", ephemeral=True
+    )
+
+
+@bot.tree.command(name="assets", description="Voir tous les assets configurés")
+async def list_assets(interaction: discord.Interaction):
+    from config_manager import load
+    cfg = load()
+    assets   = cfg.get("assets", {})
+    channels = cfg.get("asset_channels", {})
+    if not assets:
+        await interaction.response.send_message("📭 Aucun asset configuré", ephemeral=True)
+        return
+    embed = discord.Embed(title="📡  Assets configurés", color=0x7289da)
+    for coin, active in assets.items():
+        ch_id  = channels.get(coin, 0) or ASSET_CHANNELS.get(coin, 0)
+        ch_txt = f"<#{ch_id}>" if ch_id else "canal par défaut"
+        embed.add_field(
+            name=f"{'✅' if active else '❌'} {coin}",
+            value=ch_txt,
+            inline=True
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
