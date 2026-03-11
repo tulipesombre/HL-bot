@@ -8,8 +8,15 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Assets TradFi (contiennent "!") auto-tradés sur Hyperliquid
-HL_TRADFI_EXCEPTIONS = {"6E1!", "6S1!"}
-
+HL_TRADFI_EXCEPTIONS = {
+    "6E1!",   # EUR → HL: EUR
+    "6S1!",   # CHF → HL: CHF
+    "SI1!",   # Silver → HL: SI
+    "GC1!",   # Gold → HL: GC
+    "CL1!",   # Crude Oil → HL: CL
+    "NQ1!",   # Nasdaq → HL: XYZ100
+    "ES1!",   # S&P500 → HL: USA500
+}
 
 # ════════════════════════════════════════════════════════════
 # HELPERS — PARSING PAYLOAD TRADINGVIEW
