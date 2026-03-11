@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import re
+import json as json_module
 from flask import Flask, request, jsonify
 
 logger = logging.getLogger(__name__)
@@ -120,12 +122,15 @@ def _execute_trade(payload, meta, db):
 # ROUTES
 # ════════════════════════════════════════════════════════════
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     import discord_bot as db
     from config_manager import load
-    import re
-    import json as json_module
 
     try:
         payload = request.get_json(force=True, silent=True)
@@ -139,21 +144,6 @@ def webhook():
                 return jsonify({"error": "payload JSON invalide"}), 400
         if not payload:
             return jsonify({"error": "payload vide"}), 400
-
-        meta   = _parse_footer(payload)
-        # ... reste inchangé
-
-payload = request.get_json(force=True, silent=True)
-if not payload:
-    raw = request.get_data(as_text=True)
-    logger.error(f"JSON invalide reçu: {raw[:500]}")
-    fixed = re.sub(r'(\d),(\d)', r'\1.\2', raw)
-    try:
-        payload = json_module.loads(fixed)
-    except Exception:
-        return jsonify({"error": "payload JSON invalide"}), 400
-if not payload:
-    return jsonify({"error": "payload vide"}), 400
 
         meta   = _parse_footer(payload)
         event  = meta.get("event", "")
@@ -170,16 +160,25 @@ if not payload:
 
         # ── CHOD_TOUCH : trade si entry_mode = touch ────────────────
         elif event == "CHOD_TOUCH":
-            cfg = load()
-            entry_mode = cfg.get("entry_mode", "touch")
+            cfg         = load()
+            entry_mode  = cfg.get("entry_mode", "touch")
+            ticker      = meta.get("ticker", "")
+            is_hl_asset = "!" not in ticker
+
+            if not is_hl_asset:
+                # TradFi → forward Discord uniquement
+                logger.info(f"CHOD_TOUCH TradFi {ticker} → Discord uniquement")
+                if db.bot_loop:
+                    asyncio.run_coroutine_threadsafe(
+                        db.send_setup_armed(payload, ticker), db.bot_loop
+                    )
+                return jsonify({"status": "forwarded_tradfi"}), 200
 
             if entry_mode == "touch":
                 logger.info("CHOD_TOUCH reçu — entry_mode=touch → exécution trade")
                 return _execute_trade(payload, meta, db)
             else:
-                # mode close : on forward juste sur Discord pour info
                 logger.info("CHOD_TOUCH reçu — entry_mode=close → forwarding Discord uniquement")
-                ticker = meta.get("ticker", "")
                 if db.bot_loop:
                     asyncio.run_coroutine_threadsafe(
                         db.send_setup_armed(payload, ticker), db.bot_loop
@@ -188,7 +187,7 @@ if not payload:
 
         # ── ENTRY_CLOSE : trade si entry_mode = close ───────────────
         elif event == "ENTRY_CLOSE":
-            cfg = load()
+            cfg        = load()
             entry_mode = cfg.get("entry_mode", "touch")
 
             if entry_mode == "close":
