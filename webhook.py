@@ -7,16 +7,15 @@ from flask import Flask, request, jsonify
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
+# Assets TradFi (contiennent "!") auto-tradés sur Hyperliquid
+HL_TRADFI_EXCEPTIONS = {"6E1!", "6S1!"}
+
 
 # ════════════════════════════════════════════════════════════
 # HELPERS — PARSING PAYLOAD TRADINGVIEW
 # ════════════════════════════════════════════════════════════
 
 def _parse_footer(payload: dict) -> dict:
-    """
-    Extrait event, setup, ticker depuis le footer.
-    Format : "event: CHOD_TOUCH | S1 | BTCUSDT.P"
-    """
     try:
         footer = payload["embeds"][0]["footer"]["text"]
         parts  = [p.strip() for p in footer.split("|")]
@@ -44,10 +43,6 @@ def _get_field(payload: dict, name: str) -> str:
 
 
 def _execute_trade(payload, meta, db):
-    """
-    Logique commune d'exécution trade — utilisée par CHOD_TOUCH (mode touch)
-    et ENTRY_CLOSE (mode close).
-    """
     from risk_manager import should_trade, calc_position, round_size, get_coin
     from hyperliquid_client import get_balance, open_trade
     from config_manager import load
@@ -59,18 +54,15 @@ def _execute_trade(payload, meta, db):
     dr_detail = _get_field(payload, "DR Detail")
     cfg       = load()
 
-    # Choix du SL selon config
     if cfg["sl_type"] == "structural":
         sl_raw = _get_field(payload, "SL_Struct")
     else:
         sl_raw = _get_field(payload, "SL_Chod") or _get_field(payload, "SL_Struct")
 
-    # Entry price : champ "Entry" si présent (ENTRY_CLOSE), sinon "Niveau" (CHOD_TOUCH)
     entry_raw   = _get_field(payload, "Entry") or _get_field(payload, "Niveau")
     entry_price = float(entry_raw)
     sl_price    = float(sl_raw)
 
-    # Vérification des conditions de trade
     ok, reason = should_trade(setup, ticker, dr_detail)
     if not ok:
         logger.info(f"Trade bloqué : {reason}")
@@ -81,7 +73,6 @@ def _execute_trade(payload, meta, db):
             )
         return jsonify({"status": "blocked", "reason": reason}), 200
 
-    # Calcul de la position
     coin    = get_coin(ticker)
     balance = get_balance()
     calc    = calc_position(entry_price, sl_price, balance)
@@ -92,7 +83,6 @@ def _execute_trade(payload, meta, db):
         f"tp={calc['tp']:.4f} size={size} lev={calc['leverage']}x"
     )
 
-    # Ouverture du trade sur Hyperliquid
     result = open_trade(
         coin, is_long, size,
         calc["leverage"], sl_price, calc["tp"]
@@ -107,7 +97,6 @@ def _execute_trade(payload, meta, db):
                 db.bot_loop
             )
         return jsonify({"status": "executed", "coin": coin}), 200
-
     else:
         msg = f"Trade échoué sur {coin} : {result.get('error')}"
         logger.error(msg)
@@ -158,15 +147,15 @@ def webhook():
                 )
             return jsonify({"status": "forwarded"}), 200
 
-        # ── CHOD_TOUCH : trade si entry_mode = touch ────────────────
+        # ── CHOD_TOUCH ───────────────────────────────────────────────
         elif event == "CHOD_TOUCH":
             cfg         = load()
             entry_mode  = cfg.get("entry_mode", "touch")
             ticker      = meta.get("ticker", "")
-            is_hl_asset = "!" not in ticker
+            # HL asset = pas de "!" OU exception explicite (futures CME tradés sur HL)
+            is_hl_asset = "!" not in ticker or ticker in HL_TRADFI_EXCEPTIONS
 
             if not is_hl_asset:
-                # TradFi → forward Discord uniquement
                 logger.info(f"CHOD_TOUCH TradFi {ticker} → Discord uniquement")
                 if db.bot_loop:
                     asyncio.run_coroutine_threadsafe(
@@ -185,7 +174,7 @@ def webhook():
                     )
                 return jsonify({"status": "forwarded_touch_info"}), 200
 
-        # ── ENTRY_CLOSE : trade si entry_mode = close ───────────────
+        # ── ENTRY_CLOSE ──────────────────────────────────────────────
         elif event == "ENTRY_CLOSE":
             cfg        = load()
             entry_mode = cfg.get("entry_mode", "touch")
