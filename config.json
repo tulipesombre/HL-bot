@@ -7,7 +7,7 @@
   "assets": {
     "BTC": true, "ETH": true, "SOL": true, "HYPE": true,
     "BNB": true, "XRP": true,
-    "XYZ100": true, "USA500": true, "GC": true, "SI": true, "CL": true,
+    "XYZ100": true, "USA500": true, "GC": true, "SI": true, "CL": true
 },
   "dr_filter": "off",
   "max_leverage": 40,
@@ -17,7 +17,7 @@
     "BTCUSDT.P": "BTC", "ETHUSDT.P": "ETH", "SOLUSDT.P": "SOL",
     "HYPEUSDT.P": "HYPE", "BNBUSDT.P": "BNB", "XRPUSDT.P": "XRP",
     "XYZ100USDT.P": "XYZ100", "USA500USDT.P": "USA500",
-    "GCUSDT.P": "GC", "SIUSDT.P": "SI", "CLUSDT.P": "CL",
+    "GCUSDT.P": "GC", "SIUSDT.P": "SI", "CLUSDT.P": "CL"
 },
   "asset_channels": {},
   "coin_precision": {},
