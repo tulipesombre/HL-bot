@@ -7,12 +7,13 @@ DEFAULT_PRECISION = 4
 DEFAULT_MIN_SIZE  = 0.001
 
 KNOWN_PRECISION = {
-    "BTC":  5, "ETH": 4, "SOL": 2, "HYPE": 1, "BNB": 3,
+    "BTC": 5, "ETH": 4, "SOL": 2, "HYPE": 1, "BNB": 3, "XRP": 4,
+    "XYZ100": 3, "USA500": 2, "GC": 2, "SI": 2, "CL": 2,
 }
 KNOWN_MIN_SIZE = {
-    "BTC":  0.0001, "ETH": 0.001, "SOL": 0.1, "HYPE": 1.0, "BNB": 0.01,
+    "BTC": 0.0001, "ETH": 0.001, "SOL": 0.1, "HYPE": 1.0, "BNB": 0.01, "XRP": 1.0,
+    "XYZ100": 0.001, "USA500": 0.01, "GC": 0.01, "SI": 0.1, "CL": 0.1,
 }
-
 
 def get_coin(ticker: str) -> str:
     cfg = load()
@@ -20,7 +21,6 @@ def get_coin(ticker: str) -> str:
     if ticker in ticker_map:
         return ticker_map[ticker]
     return ticker.replace("USDT.P", "").replace("USDT", "").replace("-PERP", "")
-
 
 def add_asset(ticker: str, channel_id: int = 0) -> dict:
     """Ajoute un asset dynamiquement sans toucher au code."""
@@ -40,7 +40,6 @@ def add_asset(ticker: str, channel_id: int = 0) -> dict:
     save(cfg)
     return {"coin": coin, "ticker": ticker, "channel_id": channel_id}
 
-
 def remove_asset(coin: str) -> bool:
     cfg = load()
     coin = coin.upper()
@@ -52,14 +51,11 @@ def remove_asset(coin: str) -> bool:
     save(cfg)
     return True
 
-
 def get_precision(coin: str) -> int:
     return load().get("coin_precision", {}).get(coin, KNOWN_PRECISION.get(coin, DEFAULT_PRECISION))
 
-
 def get_min_size(coin: str) -> float:
     return load().get("coin_min_size", {}).get(coin, KNOWN_MIN_SIZE.get(coin, DEFAULT_MIN_SIZE))
-
 
 def should_trade(setup: str, ticker: str, dr_detail: str) -> tuple[bool, str]:
     cfg = load()
@@ -78,13 +74,11 @@ def should_trade(setup: str, ticker: str, dr_detail: str) -> tuple[bool, str]:
         return False, "🔴 DR non aligné bloqué (mode strict)"
     return True, "✅ OK"
 
-
 def calc_max_safe_leverage(entry: float, sl: float, is_long: bool, safety: float = 0.8) -> int:
     dist_pct = (entry - sl) / entry if is_long else (sl - entry) / entry
     if dist_pct <= 0:
         return 1
     return max(1, int(safety / dist_pct))
-
 
 def calc_position(entry: float, sl: float, balance: float) -> dict:
     cfg      = load()
@@ -105,7 +99,6 @@ def calc_position(entry: float, sl: float, balance: float) -> dict:
         "leverage": leverage, "is_long": is_long,
         "sl_pct": round(sl_pct * 100, 3), "r_target": r,
     }
-
 
 def round_size(coin: str, size_raw: float) -> float:
     precision = get_precision(coin)
