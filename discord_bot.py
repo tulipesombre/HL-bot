@@ -26,6 +26,7 @@ ASSET_CHANNELS = {
     "GC":     int(os.environ.get("DISCORD_CHANNEL_GC",     0)),
     "SI":     int(os.environ.get("DISCORD_CHANNEL_SI",     0)),
     "CL":     int(os.environ.get("DISCORD_CHANNEL_CL",     0)),
+    "EUR": int(os.environ.get("DISCORD_CHANNEL_EUR", 0)),
 }
 
 def get_channel_for_ticker(ticker: str):
