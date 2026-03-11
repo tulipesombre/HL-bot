@@ -7,8 +7,9 @@
   "assets": {
     "BTC": true, "ETH": true, "SOL": true, "HYPE": true,
     "BNB": true, "XRP": true,
-    "XYZ100": true, "USA500": true, "GC": true, "SI": true, "CL": true, "EUR": true
-},
+    "XYZ100": true, "USA500": true, "GC": true, "SI": true, "CL": true,
+    "EUR": true, "CHF": true
+  },
   "dr_filter": "off",
   "max_leverage": 40,
   "bot_active": true,
@@ -16,10 +17,12 @@
   "ticker_map": {
     "BTCUSDT.P": "BTC", "ETHUSDT.P": "ETH", "SOLUSDT.P": "SOL",
     "HYPEUSDT.P": "HYPE", "BNBUSDT.P": "BNB", "XRPUSDT.P": "XRP",
-    "XYZ100USDT.P": "XYZ100", "USA500USDT.P": "USA500","SI1!": "SI", "GC1!": "GC", 
-    "CL1!": "CL", "NQ1!": "XYZ100", "ES1!": "USA500", "6E1!": "EUR", "6S1!": "CHF"
-    "GCUSDT.P": "GC", "SIUSDT.P": "SI", "CLUSDT.P": "CL", "6E1!": "EUR"
-},
+    "XYZ100USDT.P": "XYZ100", "USA500USDT.P": "USA500",
+    "GCUSDT.P": "GC", "SIUSDT.P": "SI", "CLUSDT.P": "CL",
+    "SI1!": "SI", "GC1!": "GC", "CL1!": "CL",
+    "NQ1!": "XYZ100", "ES1!": "USA500",
+    "6E1!": "EUR", "6S1!": "CHF"
+  },
   "asset_channels": {},
   "coin_precision": {},
   "coin_min_size": {}
