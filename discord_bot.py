@@ -21,6 +21,11 @@ ASSET_CHANNELS = {
     "HYPE": int(os.environ.get("DISCORD_CHANNEL_HYPE", 0)),
     "BNB":  int(os.environ.get("DISCORD_CHANNEL_BNB",  0)),
     "XRP":  int(os.environ.get("DISCORD_CHANNEL_XRP",  0)),
+    "XYZ100": int(os.environ.get("DISCORD_CHANNEL_XYZ100", 0)),
+    "USA500": int(os.environ.get("DISCORD_CHANNEL_USA500", 0)),
+    "GC":     int(os.environ.get("DISCORD_CHANNEL_GC",     0)),
+    "SI":     int(os.environ.get("DISCORD_CHANNEL_SI",     0)),
+    "CL":     int(os.environ.get("DISCORD_CHANNEL_CL",     0)),
 }
 
 def get_channel_for_ticker(ticker: str):
