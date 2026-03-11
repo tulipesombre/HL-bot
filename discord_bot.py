@@ -350,7 +350,6 @@ async def remove_asset_cmd(interaction: discord.Interaction, coin: str):
         f"🗑️ **{coin.upper()}** supprimé de la liste des assets", ephemeral=True
     )
 
-
 @bot.tree.command(name="assets", description="Voir tous les assets configurés")
 async def list_assets(interaction: discord.Interaction):
     from config_manager import load
@@ -370,3 +369,58 @@ async def list_assets(interaction: discord.Interaction):
             inline=True
         )
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="trade", description="Ouvrir un trade manuellement")
+@app_commands.describe(
+    coin="Asset (ex: BTC, SI, EUR)",
+    direction="LONG ou SHORT",
+    sl="Niveau de Stop-Loss"
+)
+@app_commands.choices(direction=[
+    app_commands.Choice(name="LONG",  value="LONG"),
+    app_commands.Choice(name="SHORT", value="SHORT"),
+])
+async def manual_trade(interaction: discord.Interaction, coin: str, direction: str, sl: float):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        import hyperliquid_client as hl
+        from risk_manager import calc_position, round_size
+        from config_manager import load
+
+        cfg     = load()
+        is_long = direction == "LONG"
+        coin    = coin.upper()
+
+        # Prix market actuel via HL
+        loop        = asyncio.get_running_loop()
+        balance     = await asyncio.wait_for(loop.run_in_executor(None, hl.get_balance), timeout=8.0)
+        mid_price   = await asyncio.wait_for(loop.run_in_executor(None, hl.get_mid_price, coin), timeout=8.0)
+
+        calc = calc_position(mid_price, sl, balance)
+        size = round_size(coin, calc["size_raw"])
+
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, lambda: hl.open_trade(
+                coin, is_long, size, calc["leverage"], sl, calc["tp"]
+            )),
+            timeout=15.0
+        )
+
+        if result["success"]:
+            embed = discord.Embed(
+                title=f"{'📈' if is_long else '📉'}  Trade manuel — {coin}",
+                color=0x00e676 if is_long else 0xff1744
+            )
+            embed.add_field(name="Direction",   value=direction,                          inline=True)
+            embed.add_field(name="Entry",        value=f"`{result['fill_price']:,.4f}`",   inline=True)
+            embed.add_field(name="Stop-Loss",    value=f"`{sl:,.4f}`",                     inline=True)
+            embed.add_field(name="Take-Profit",  value=f"`{calc['tp']:,.4f}`",             inline=True)
+            embed.add_field(name="Size",         value=f"{size} {coin}",                  inline=True)
+            embed.add_field(name="Risque",       value=f"${calc['risk_usd']:,.2f}",        inline=True)
+            embed.add_field(name="Levier",       value=f"{calc['leverage']}x",             inline=True)
+            await interaction.followup.send(embed=embed, view=TradeView(coin), ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ Erreur : {result.get('error')}", ephemeral=True)
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Exception : {e}", ephemeral=True)
