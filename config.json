@@ -4,7 +4,7 @@
   "r_target": 2.0,
   "sl_type": "structural",
   "setups": "both",
-"assets": {
+  "assets": {
     "BTC": true, "ETH": true, "SOL": true, "HYPE": true,
     "BNB": true, "XRP": true,
     "XYZ100": true, "USA500": true, "GOLD": true, "SILVER": true, "CL": true,
@@ -14,7 +14,7 @@
   "max_leverage": 40,
   "bot_active": true,
   "entry_mode": "touch",
-"ticker_map": {
+  "ticker_map": {
     "BTCUSDT.P": "BTC", "ETHUSDT.P": "ETH", "SOLUSDT.P": "SOL",
     "HYPEUSDT.P": "HYPE", "BNBUSDT.P": "BNB", "XRPUSDT.P": "XRP",
     "XYZ100USDT.P": "XYZ100", "USA500USDT.P": "USA500",
