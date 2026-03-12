@@ -207,18 +207,10 @@ def get_mid_price(coin: str) -> float:
         headers={"Content-Type": "application/json"}
     )
     data = resp.json()
-    # data[0] = meta, data[1] = ctxs
     spot_meta = data[0]
     spot_ctxs = data[1]
-    
-    for i, token in enumerate(spot_meta.get("tokens", [])):
-        if token.get("name") == coin:
-            logger.info(f"Token trouvé: {token}")
-            break
 
-    for i, market in enumerate(spot_meta.get("universe", [])):
-        name = market.get("name", "")
-        if coin in name:
-            logger.info(f"Market trouvé: {market}, ctx: {spot_ctxs[i] if i < len(spot_ctxs) else 'N/A'}")
+    logger.info(f"Tokens: {[t.get('name') for t in spot_meta.get('tokens', [])]}")
+    logger.info(f"Markets: {[m.get('name') for m in spot_meta.get('universe', [])]}")
 
     raise KeyError(f"Coin '{coin}' introuvable — voir logs")
