@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Assets TradFi (contiennent "!") auto-tradés sur Hyperliquid
-HL_TRADFI_EXCEPTIONS = {"6E1!", "6S1!"}
+HL_TRADFI_EXCEPTIONS = {"6E1!"}
 
 
 # ════════════════════════════════════════════════════════════
