@@ -8,15 +8,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Assets TradFi (contiennent "!") auto-tradés sur Hyperliquid
-HL_TRADFI_EXCEPTIONS = {
-    "6E1!",   # EUR → HL: EUR
-    "6S1!",   # CHF → HL: CHF
-    "SI1!",   # Silver → HL: SI
-    "GC1!",   # Gold → HL: GC
-    "CL1!",   # Crude Oil → HL: CL
-    "NQ1!",   # Nasdaq → HL: XYZ100
-    "ES1!",   # S&P500 → HL: USA500
-}
+HL_TRADFI_EXCEPTIONS = {"6E1!", "6S1!"}
+
 
 # ════════════════════════════════════════════════════════════
 # HELPERS — PARSING PAYLOAD TRADINGVIEW
@@ -61,10 +54,11 @@ def _execute_trade(payload, meta, db):
     dr_detail = _get_field(payload, "DR Detail")
     cfg       = load()
 
+    # Noms PineScript : "SL Struct" et "SL CHOD" (espaces, pas underscores)
     if cfg["sl_type"] == "structural":
-        sl_raw = _get_field(payload, "SL_Struct")
+        sl_raw = _get_field(payload, "SL Struct")
     else:
-        sl_raw = _get_field(payload, "SL_Chod") or _get_field(payload, "SL_Struct")
+        sl_raw = _get_field(payload, "SL CHOD") or _get_field(payload, "SL Struct")
 
     entry_raw   = _get_field(payload, "Entry") or _get_field(payload, "Niveau")
     entry_price = float(entry_raw)
