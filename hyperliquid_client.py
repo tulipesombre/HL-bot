@@ -187,12 +187,13 @@ def _open_trade_spot(coin: str, is_long: bool, size: float, leverage: int,
     lev_result = exchange.update_leverage(leverage, market_id, is_cross=False)
     logger.info(f"Levier spot {coin} ({market_id}): {lev_result}")
 
-    try:
-        mid = _spot_mid_price(market_id, info)
-    except Exception:
-        mid = entry_price
+if entry_price and entry_price > 0:
+    mid = entry_price
+else:
+    raise ValueError(f"Prix introuvable pour {coin} — spécifie le paramètre entry manuellement")
 
-    limit_px = round(mid * 1.01 if is_long else mid * 0.99, 4)
+slippage  = 0.002  # 0.2% — juste assez pour être agressif
+limit_px  = round(mid * (1 + slippage) if is_long else mid * (1 - slippage), 2)
 
     market_result = exchange.order(
         market_id, is_long, size, limit_px,
