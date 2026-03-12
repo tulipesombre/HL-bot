@@ -21,7 +21,8 @@ open_orders: dict = {}
 def _clients():
     pk           = os.environ["HL_PRIVATE_KEY"]
     account      = eth_account.Account.from_key(pk)
-    exchange     = Exchange(account, base_url=BASE_URL)
+    # perp_dexs=["xyz"] charge les métadonnées HIP-3 (GOLD, SILVER, CL, etc.)
+    exchange     = Exchange(account, base_url=BASE_URL, perp_dexs=[HIP3_DEX])
     info         = Info(base_url=BASE_URL, skip_ws=True)
     main_address = os.environ.get("HL_WALLET_ADDRESS", account.address)
     return exchange, info, main_address
