@@ -24,7 +24,7 @@ ASSET_CHANNELS = {
     "XYZ100": int(os.environ.get("DISCORD_CHANNEL_XYZ100", 0)),
     "USA500": int(os.environ.get("DISCORD_CHANNEL_USA500", 0)),
     "GC":     int(os.environ.get("DISCORD_CHANNEL_GC",     0)),
-    "SI":     int(os.environ.get("DISCORD_CHANNEL_SI",     0)),
+    "SILVER":     int(os.environ.get("DISCORD_CHANNEL_SI",     0)),
     "CL":     int(os.environ.get("DISCORD_CHANNEL_CL",     0)),
     "EUR": int(os.environ.get("DISCORD_CHANNEL_EUR", 0)),
 }
