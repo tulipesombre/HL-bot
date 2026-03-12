@@ -8,7 +8,7 @@ DEFAULT_MIN_SIZE  = 0.001
 
 KNOWN_PRECISION = {
     "BTC": 5, "ETH": 4, "SOL": 2, "HYPE": 1, "BNB": 3, "XRP": 4,
-    "XYZ100": 3, "USA500": 2, "GOLD": 2, "SILVER": 2, "CL": 2, "EUR": 4,
+    "XYZ100": 4, "USA500": 2, "GOLD": 4, "SILVER": 2, "CL": 3, "EUR": 1,
 }
 KNOWN_MIN_SIZE = {
     "BTC": 0.0001, "ETH": 0.001, "SOL": 0.1, "HYPE": 1.0, "BNB": 0.01, "XRP": 1.0,

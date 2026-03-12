@@ -2,7 +2,10 @@ import asyncio
 import logging
 import re
 import json as json_module
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify
+
+_trade_executor = ThreadPoolExecutor(max_workers=4)
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
@@ -44,7 +47,11 @@ def _get_field(payload: dict, name: str) -> str:
     return ""
 
 
-def _execute_trade(payload, meta, db):
+def _execute_trade_bg(payload, meta, db):
+    """Exécution du trade en background — appelé via ThreadPoolExecutor.
+    TradingView a un timeout court (~3s) ; on lui répond 200 immédiatement
+    et on traite le trade ici sans bloquer la réponse HTTP.
+    """
     from risk_manager import should_trade, calc_position, round_size, get_coin
     from hyperliquid_client import get_balance, open_trade
     from config_manager import load
@@ -74,7 +81,7 @@ def _execute_trade(payload, meta, db):
                 db.send_trade_blocked(reason, ticker, setup, direction),
                 db.bot_loop
             )
-        return jsonify({"status": "blocked", "reason": reason}), 200
+        return
 
     coin    = get_coin(ticker)
     balance = get_balance()
@@ -88,7 +95,8 @@ def _execute_trade(payload, meta, db):
 
     result = open_trade(
         coin, is_long, size,
-        calc["leverage"], sl_price, calc["tp"]
+        calc["leverage"], sl_price, calc["tp"],
+        entry_price   # ← transmis pour _recalc_tp depuis fill réel
     )
 
     if result["success"]:
@@ -99,7 +107,6 @@ def _execute_trade(payload, meta, db):
                 db.send_trade_opened(trade_info, pos, calc),
                 db.bot_loop
             )
-        return jsonify({"status": "executed", "coin": coin}), 200
     else:
         msg = f"Trade échoué sur {coin} : {result.get('error')}"
         logger.error(msg)
@@ -107,7 +114,12 @@ def _execute_trade(payload, meta, db):
             asyncio.run_coroutine_threadsafe(
                 db.send_error(msg), db.bot_loop
             )
-        return jsonify({"status": "error", "error": msg}), 500
+
+
+def _submit_trade(payload, meta, db):
+    """Soumet le trade en background et retourne 200 immédiatement à TradingView."""
+    _trade_executor.submit(_execute_trade_bg, payload, meta, db)
+    return jsonify({"status": "accepted"}), 200
 
 
 # ════════════════════════════════════════════════════════════
@@ -168,7 +180,7 @@ def webhook():
 
             if entry_mode == "touch":
                 logger.info("CHOD_TOUCH reçu — entry_mode=touch → exécution trade")
-                return _execute_trade(payload, meta, db)
+                return _submit_trade(payload, meta, db)
             else:
                 logger.info("CHOD_TOUCH reçu — entry_mode=close → forwarding Discord uniquement")
                 if db.bot_loop:
@@ -184,7 +196,7 @@ def webhook():
 
             if entry_mode == "close":
                 logger.info("ENTRY_CLOSE reçu — entry_mode=close → exécution trade")
-                return _execute_trade(payload, meta, db)
+                return _submit_trade(payload, meta, db)
             else:
                 logger.info("ENTRY_CLOSE reçu — entry_mode=touch → ignoré")
                 return jsonify({"status": "ignored_wrong_mode"}), 200

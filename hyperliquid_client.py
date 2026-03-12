@@ -114,6 +114,20 @@ def _extract_fill_price(order_result: dict, fallback: float) -> float:
     return fallback
 
 
+def _check_order_error(result: dict) -> str | None:
+    """Retourne le message d'erreur interne HL si l'ordre a échoué, None sinon.
+    L'API HL peut retourner status='ok' même si l'ordre individuel a échoué
+    (ex: {'statuses': [{'error': 'Order has invalid size.'}]}).
+    """
+    try:
+        status = result["response"]["data"]["statuses"][0]
+        if "error" in status:
+            return status["error"]
+    except (KeyError, IndexError, TypeError):
+        pass
+    return None
+
+
 def _recalc_tp(fill_price: float, sl_price: float, tp_price: float,
                entry_price: float, is_long: bool) -> float:
     """
@@ -180,6 +194,9 @@ def _open_trade_perp(coin: str, is_long: bool, size: float, leverage: int,
 
     if not market_result or market_result.get("status") != "ok":
         return {"success": False, "error": str(market_result)}
+    order_err = _check_order_error(market_result)
+    if order_err:
+        return {"success": False, "error": order_err}
 
     fill_price = _extract_fill_price(market_result, entry_price or sl_price)
     tp_price   = _recalc_tp(fill_price, sl_price, tp_price, entry_price or fill_price, is_long)
@@ -235,6 +252,9 @@ def _open_trade_hip3(coin: str, is_long: bool, size: float, leverage: int,
 
     if not market_result or market_result.get("status") != "ok":
         return {"success": False, "error": str(market_result)}
+    order_err = _check_order_error(market_result)
+    if order_err:
+        return {"success": False, "error": order_err}
 
     fill_price = _extract_fill_price(market_result, entry_price)
     tp_price   = _recalc_tp(fill_price, sl_price, tp_price, entry_price, is_long)
