@@ -194,19 +194,31 @@ def close_position(coin: str) -> dict:
 def get_mid_price(coin: str) -> float:
     _, info, _ = _clients()
 
+    # Essai 1 : all_mids (crypto perps)
     mids = info.all_mids()
     if coin in mids:
         return float(mids[coin])
 
-    meta, asset_ctxs = info.meta_and_asset_ctxs()
-    # Log temporaire — à supprimer après
-    all_names = [a["name"] for a in meta["universe"]]
-    logger.info(f"Index trouvé pour {coin}: {i}, clé mids: @{i}, valeur: {mids.get(f'@{i}')}")
+    # Essai 2 : REST direct pour TradFi
+    import requests
+    resp = requests.post(
+        f"{BASE_URL}/info",
+        json={"type": "allMids"},
+        headers={"Content-Type": "application/json"}
+    )
+    all_data = resp.json()
+    
+    # Cherche dans la réponse complète
+    if isinstance(all_data, dict) and coin in all_data:
+        return float(all_data[coin])
 
-    for i, asset in enumerate(meta["universe"]):
-        if asset["name"] == coin:
-            ctx = asset_ctxs[i]
-            if ctx and ctx.get("markPx"):
-                return float(ctx["markPx"])
-
+    # Essai 3 : mark price via clearinghouseState
+    resp2 = requests.post(
+        f"{BASE_URL}/info",
+        json={"type": "metaAndAssetCtxs"},
+        headers={"Content-Type": "application/json"}
+    )
+    data = resp2.json()
+    logger.info(f"TradFi search for {coin}: keys={list(data[0].get('universe', [{}])[:3])}")
+    
     raise KeyError(f"Coin '{coin}' introuvable sur Hyperliquid")
