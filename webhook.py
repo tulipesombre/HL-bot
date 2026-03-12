@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Assets TradFi (contiennent "!") auto-tradés sur Hyperliquid via HIP-3
-# ES1! (USA500) retiré : xyz:USA500 n'existe pas sur le DEX xyz → Discord only
+# xyz: GOLD, SILVER, CL, XYZ100, EUR — cash: USA500
 HL_TRADFI_EXCEPTIONS = {
-    "SI1!", "GC1!", "CL1!", "NQ1!", "6E1!"
+    "SI1!", "GC1!", "CL1!", "NQ1!", "ES1!", "6E1!"
 }
 
 # ════════════════════════════════════════════════════════════

@@ -8,21 +8,31 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.hyperliquid.xyz"
 
-# Nom du DEX HIP-3 hébergeant les TradFi sur Hyperliquid
+# DEX HIP-3 par défaut
 HIP3_DEX = "xyz"
 
-# Coins TradFi disponibles sur le DEX xyz (vérifiés via metaAndAssetCtxs)
-# USA500 (ES1!) n'existe pas sur xyz → retiré, alerte Discord uniquement
-TRADFI_COINS = {"SILVER", "GOLD", "CL", "XYZ100", "EUR"}
+# Mapping coin → DEX HIP-3 (xyz ou cash selon disponibilité)
+# Vérifié via API metaAndAssetCtxs pour chaque DEX
+HIP3_COIN_DEX = {
+    "GOLD":   "xyz",
+    "SILVER": "xyz",
+    "CL":     "xyz",
+    "XYZ100": "xyz",
+    "EUR":    "xyz",
+    "USA500": "cash",   # cash:USA500 existe, xyz:USA500 n'existe pas
+}
 
-# Leverage maximum réel par coin HIP-3 (source : API metaAndAssetCtxs)
-# Evite l'erreur "Invalid leverage value" si max_leverage config > max coin
+# Tous les coins TradFi tradés via HIP-3
+TRADFI_COINS = set(HIP3_COIN_DEX.keys())
+
+# Leverage maximum réel par coin (source : API metaAndAssetCtxs)
 HIP3_MAX_LEVERAGE = {
     "XYZ100": 30,
     "GOLD":   25,
     "SILVER": 25,
     "CL":     20,
     "EUR":    50,
+    "USA500": 20,
 }
 
 # Stockage OIDs SL/TP en mémoire (perdu au redémarrage)
@@ -32,16 +42,17 @@ open_orders: dict = {}
 def _clients():
     pk           = os.environ["HL_PRIVATE_KEY"]
     account      = eth_account.Account.from_key(pk)
-    # perp_dexs=["xyz"] charge les métadonnées HIP-3 (GOLD, SILVER, CL, etc.)
-    exchange     = Exchange(account, base_url=BASE_URL, perp_dexs=[HIP3_DEX])
+    # perp_dexs charge les métadonnées HIP-3 pour les deux DEX utilisés
+    exchange     = Exchange(account, base_url=BASE_URL, perp_dexs=["xyz", "cash"])
     info         = Info(base_url=BASE_URL, skip_ws=True)
     main_address = os.environ.get("HL_WALLET_ADDRESS", account.address)
     return exchange, info, main_address
 
 
 def _hip3_coin(coin: str) -> str:
-    """Retourne le nom namespaced HIP-3 du coin, ex. 'xyz:GOLD'."""
-    return f"{HIP3_DEX}:{coin}"
+    """Retourne le nom namespaced HIP-3 du coin, ex. 'xyz:GOLD', 'cash:USA500'."""
+    dex = HIP3_COIN_DEX.get(coin, HIP3_DEX)
+    return f"{dex}:{coin}"
 
 
 # ════════════════════════════════════════════════════════════
@@ -122,8 +133,9 @@ def _recalc_tp(fill_price: float, sl_price: float, tp_price: float,
 
 
 def _hip3_mid_price(coin: str, info) -> float:
-    """Prix mid d'un coin TradFi via DEX xyz, ex. 'xyz:GOLD' → 5096.05."""
-    mids = info.all_mids(dex=HIP3_DEX)
+    """Prix mid d'un coin TradFi HIP-3, ex. 'xyz:GOLD' ou 'cash:USA500'."""
+    dex  = HIP3_COIN_DEX.get(coin, HIP3_DEX)
+    mids = info.all_mids(dex=dex)
     key  = _hip3_coin(coin)
     if key in mids:
         return float(mids[key])
