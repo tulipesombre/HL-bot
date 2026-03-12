@@ -201,7 +201,7 @@ def get_mid_price(coin: str) -> float:
     meta, asset_ctxs = info.meta_and_asset_ctxs()
     # Log temporaire — à supprimer après
     all_names = [a["name"] for a in meta["universe"]]
-    logger.info(f"Universe complet: {[a['name'] for a in meta['universe']]}")
+    logger.info(f"Index trouvé pour {coin}: {i}, clé mids: @{i}, valeur: {mids.get(f'@{i}')}")
 
     for i, asset in enumerate(meta["universe"]):
         if asset["name"] == coin:
