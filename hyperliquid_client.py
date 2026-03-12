@@ -92,6 +92,24 @@ def _extract_fill_price(order_result: dict, fallback: float) -> float:
     return fallback
 
 
+def _recalc_tp(fill_price: float, sl_price: float, tp_price: float,
+               entry_price: float, is_long: bool) -> float:
+    """
+    Recalcule le TP depuis le fill réel pour préserver le ratio R
+    et éviter qu'un slippage d'entrée invalide le TP.
+    Ex : entry=5074, sl=5072, tp=5078 (R=2), fill=5080.38
+         → tp_recalc = 5080.38 + 2 * (5080.38 - 5072) = 5097.14
+    """
+    if entry_price <= 0 or abs(entry_price - sl_price) < 1e-9:
+        return tp_price
+    r_ratio  = abs(tp_price - entry_price) / abs(entry_price - sl_price)
+    sl_dist  = abs(fill_price - sl_price)
+    new_tp   = fill_price + sl_dist * r_ratio if is_long else fill_price - sl_dist * r_ratio
+    new_tp   = round(new_tp, 2)
+    logger.info(f"TP recalculé depuis fill {fill_price:.4f}: {tp_price:.4f} → {new_tp:.4f} (R={r_ratio:.2f})")
+    return new_tp
+
+
 def _hip3_mid_price(coin: str, info) -> float:
     """Prix mid d'un coin TradFi via DEX xyz, ex. 'xyz:GOLD' → 5096.05."""
     mids = info.all_mids(dex=HIP3_DEX)
@@ -124,11 +142,11 @@ def open_trade(coin: str, is_long: bool, size: float, leverage: int,
                sl_price: float, tp_price: float, entry_price: float = 0.0) -> dict:
     if coin in TRADFI_COINS:
         return _open_trade_hip3(coin, is_long, size, leverage, entry_price, sl_price, tp_price)
-    return _open_trade_perp(coin, is_long, size, leverage, sl_price, tp_price)
+    return _open_trade_perp(coin, is_long, size, leverage, sl_price, tp_price, entry_price)
 
 
 def _open_trade_perp(coin: str, is_long: bool, size: float, leverage: int,
-                     sl_price: float, tp_price: float) -> dict:
+                     sl_price: float, tp_price: float, entry_price: float = 0.0) -> dict:
     exchange, _, _ = _clients()
 
     lev_result = exchange.update_leverage(leverage, coin, is_cross=False)
@@ -140,7 +158,8 @@ def _open_trade_perp(coin: str, is_long: bool, size: float, leverage: int,
     if not market_result or market_result.get("status") != "ok":
         return {"success": False, "error": str(market_result)}
 
-    fill_price = _extract_fill_price(market_result, sl_price)
+    fill_price = _extract_fill_price(market_result, entry_price or sl_price)
+    tp_price   = _recalc_tp(fill_price, sl_price, tp_price, entry_price or fill_price, is_long)
 
     sl_result = exchange.order(
         coin, not is_long, size, sl_price,
@@ -192,6 +211,7 @@ def _open_trade_hip3(coin: str, is_long: bool, size: float, leverage: int,
         return {"success": False, "error": str(market_result)}
 
     fill_price = _extract_fill_price(market_result, entry_price)
+    tp_price   = _recalc_tp(fill_price, sl_price, tp_price, entry_price, is_long)
 
     sl_result = exchange.order(
         hip3_coin, not is_long, size, sl_price,
