@@ -42,7 +42,11 @@ open_orders: dict = {}
 
 
 def _clients():
-    pk      = os.environ["HL_PRIVATE_KEY"]
+    # Sur testnet, utilise HL_PRIVATE_KEY_TESTNET si définie, sinon HL_PRIVATE_KEY
+    if _TESTNET and os.environ.get("HL_PRIVATE_KEY_TESTNET"):
+        pk = os.environ["HL_PRIVATE_KEY_TESTNET"]
+    else:
+        pk = os.environ["HL_PRIVATE_KEY"]
     account = eth_account.Account.from_key(pk)
     if _TESTNET:
         # Sur testnet, Info.__init__ (appelé par Exchange ET directement) fetch spot_meta
