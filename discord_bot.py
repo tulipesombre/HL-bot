@@ -421,6 +421,7 @@ async def manual_trade(interaction: discord.Interaction, coin: str, direction: s
             await interaction.followup.send(f"❌ Erreur : {result.get('error')}")
 
     except Exception as e:
+        logger.exception(f"Erreur /trade {coin}: {e}")
         await interaction.followup.send(f"❌ Exception : {e}")
 
 @bot.tree.command(name="preset", description="Applique la config de base avec capital = solde HL actuel")
