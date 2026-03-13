@@ -44,8 +44,9 @@ open_orders: dict = {}
 def _clients():
     pk           = os.environ["HL_PRIVATE_KEY"]
     account      = eth_account.Account.from_key(pk)
-    # perp_dexs charge les métadonnées HIP-3 pour les deux DEX utilisés
-    exchange     = Exchange(account, base_url=BASE_URL, perp_dexs=["xyz", "cash"])
+    # perp_dexs charge les métadonnées HIP-3 — désactivé sur testnet (xyz/cash inexistants)
+    dex_args = {} if _TESTNET else {"perp_dexs": ["xyz", "cash"]}
+    exchange = Exchange(account, base_url=BASE_URL, **dex_args)
     info         = Info(base_url=BASE_URL, skip_ws=True)
     main_address = os.environ.get("HL_WALLET_ADDRESS", account.address)
     return exchange, info, main_address
