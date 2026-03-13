@@ -15,17 +15,33 @@ KNOWN_MIN_SIZE = {
     "XYZ100": 0.001, "USA500": 0.01, "GOLD": 0.01, "SILVER": 0.1, "CL": 0.1, "EUR": 1.0,
 }
 
+# Mapping TradingView CME tickers → noms HL
+TRADFI_TICKER_MAP = {
+    "SI1!":  "SILVER",
+    "GC1!":  "GOLD",
+    "CL1!":  "CL",
+    "6E1!":  "EUR",
+    "NQ1!":  "XYZ100",
+    # ES1! n'existe pas sur HL (USAR seulement) — pas de mapping intentionnel
+}
+
+def _resolve_coin(ticker: str) -> str:
+    """Résout un ticker TV vers le nom de coin HL."""
+    if ticker in TRADFI_TICKER_MAP:
+        return TRADFI_TICKER_MAP[ticker]
+    return ticker.replace("USDT.P", "").replace("USDT", "").replace("-PERP", "")
+
 def get_coin(ticker: str) -> str:
     cfg = load()
     ticker_map = cfg.get("ticker_map", {})
     if ticker in ticker_map:
         return ticker_map[ticker]
-    return ticker.replace("USDT.P", "").replace("USDT", "").replace("-PERP", "")
+    return _resolve_coin(ticker)
 
 def add_asset(ticker: str, channel_id: int = 0) -> dict:
     """Ajoute un asset dynamiquement sans toucher au code."""
     cfg = load()
-    coin = ticker.replace("USDT.P", "").replace("USDT", "").replace("-PERP", "")
+    coin = _resolve_coin(ticker)
 
     if "ticker_map" not in cfg:
         cfg["ticker_map"] = {}
