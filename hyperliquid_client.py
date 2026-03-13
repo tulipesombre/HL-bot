@@ -6,7 +6,10 @@ from hyperliquid.info import Info
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://api.hyperliquid.xyz"
+_TESTNET = os.environ.get("HL_TESTNET", "").lower() in ("1", "true", "yes")
+BASE_URL = "https://api.hyperliquid-testnet.xyz" if _TESTNET else "https://api.hyperliquid.xyz"
+if _TESTNET:
+    logging.getLogger(__name__).warning("⚠️  MODE TESTNET ACTIF — api.hyperliquid-testnet.xyz")
 
 # DEX HIP-3 par défaut
 HIP3_DEX = "xyz"
