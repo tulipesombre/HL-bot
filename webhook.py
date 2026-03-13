@@ -52,67 +52,75 @@ def _execute_trade_bg(payload, meta, db):
     TradingView a un timeout court (~3s) ; on lui répond 200 immédiatement
     et on traite le trade ici sans bloquer la réponse HTTP.
     """
-    from risk_manager import should_trade, calc_position, round_size, get_coin
-    from hyperliquid_client import get_balance, open_trade
-    from config_manager import load
+    try:
+        from risk_manager import should_trade, calc_position, round_size, get_coin
+        from hyperliquid_client import get_balance, open_trade
+        from config_manager import load
 
-    setup     = meta.get("setup", "")
-    ticker    = meta.get("ticker", "")
-    direction = _get_field(payload, "Direction")
-    is_long   = direction == "LONG"
-    dr_detail = _get_field(payload, "DR Detail")
-    cfg       = load()
+        setup     = meta.get("setup", "")
+        ticker    = meta.get("ticker", "")
+        direction = _get_field(payload, "Direction")
+        is_long   = direction == "LONG"
+        dr_detail = _get_field(payload, "DR Detail")
+        cfg       = load()
 
-    # Noms PineScript : "SL Struct" et "SL CHOD" (espaces, pas underscores)
-    if cfg["sl_type"] == "structural":
-        sl_raw = _get_field(payload, "SL Struct")
-    else:
-        sl_raw = _get_field(payload, "SL CHOD") or _get_field(payload, "SL Struct")
+        # Noms PineScript : "SL Struct" et "SL CHOD" (espaces, pas underscores)
+        if cfg["sl_type"] == "structural":
+            sl_raw = _get_field(payload, "SL Struct")
+        else:
+            sl_raw = _get_field(payload, "SL CHOD") or _get_field(payload, "SL Struct")
 
-    entry_raw   = _get_field(payload, "Entry") or _get_field(payload, "Niveau")
-    entry_price = float(entry_raw)
-    sl_price    = float(sl_raw)
+        entry_raw   = _get_field(payload, "Entry") or _get_field(payload, "Niveau")
+        entry_price = float(entry_raw)
+        sl_price    = float(sl_raw)
 
-    ok, reason = should_trade(setup, ticker, dr_detail)
-    if not ok:
-        logger.info(f"Trade bloqué : {reason}")
+        ok, reason = should_trade(setup, ticker, dr_detail)
+        if not ok:
+            logger.info(f"Trade bloqué : {reason}")
+            if db.bot_loop:
+                asyncio.run_coroutine_threadsafe(
+                    db.send_trade_blocked(reason, ticker, setup, direction),
+                    db.bot_loop
+                )
+            return
+
+        coin    = get_coin(ticker)
+        balance = get_balance()
+        calc    = calc_position(entry_price, sl_price, balance)
+        size    = round_size(coin, calc["size_raw"])
+
+        logger.info(
+            f"Trade {coin} {direction} | entry={entry_price} sl={sl_price} "
+            f"tp={calc['tp']:.4f} size={size} lev={calc['leverage']}x"
+        )
+
+        result = open_trade(
+            coin, is_long, size,
+            calc["leverage"], sl_price, calc["tp"],
+            entry_price   # ← transmis pour _recalc_tp depuis fill réel
+        )
+
+        if result["success"]:
+            pos = {"fill_price": result["fill_price"], "is_long": is_long}
+            trade_info = {"coin": coin, "setup": setup, "ticker": ticker}
+            if db.bot_loop:
+                asyncio.run_coroutine_threadsafe(
+                    db.send_trade_opened(trade_info, pos, calc),
+                    db.bot_loop
+                )
+        else:
+            msg = f"Trade échoué sur {coin} : {result.get('error')}"
+            logger.error(msg)
+            if db.bot_loop:
+                asyncio.run_coroutine_threadsafe(
+                    db.send_error(msg), db.bot_loop
+                )
+
+    except Exception as e:
+        logger.exception(f"Exception non gérée dans _execute_trade_bg: {e}")
         if db.bot_loop:
             asyncio.run_coroutine_threadsafe(
-                db.send_trade_blocked(reason, ticker, setup, direction),
-                db.bot_loop
-            )
-        return
-
-    coin    = get_coin(ticker)
-    balance = get_balance()
-    calc    = calc_position(entry_price, sl_price, balance)
-    size    = round_size(coin, calc["size_raw"])
-
-    logger.info(
-        f"Trade {coin} {direction} | entry={entry_price} sl={sl_price} "
-        f"tp={calc['tp']:.4f} size={size} lev={calc['leverage']}x"
-    )
-
-    result = open_trade(
-        coin, is_long, size,
-        calc["leverage"], sl_price, calc["tp"],
-        entry_price   # ← transmis pour _recalc_tp depuis fill réel
-    )
-
-    if result["success"]:
-        pos = {"fill_price": result["fill_price"], "is_long": is_long}
-        trade_info = {"coin": coin, "setup": setup, "ticker": ticker}
-        if db.bot_loop:
-            asyncio.run_coroutine_threadsafe(
-                db.send_trade_opened(trade_info, pos, calc),
-                db.bot_loop
-            )
-    else:
-        msg = f"Trade échoué sur {coin} : {result.get('error')}"
-        logger.error(msg)
-        if db.bot_loop:
-            asyncio.run_coroutine_threadsafe(
-                db.send_error(msg), db.bot_loop
+                db.send_error(f"Exception trade : {e}"), db.bot_loop
             )
 
 
