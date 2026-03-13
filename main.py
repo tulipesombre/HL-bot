@@ -9,6 +9,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import hyperliquid_client  # noqa: F401 — force l'import au démarrage pour afficher BASE_URL / mode testnet
+
 
 def run_flask(loop: asyncio.AbstractEventLoop):
     """Lance Flask dans un thread dédié, partage la loop asyncio avec discord_bot."""
