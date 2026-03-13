@@ -75,6 +75,15 @@ def _hip3_coin(coin: str) -> str:
 
 def get_balance() -> float:
     _, info, address = _clients()
+    # Priorité au compte perp (margin) — c'est là que sont les fonds pour trader
+    try:
+        state = info.user_state(address)
+        account_value = float(state.get("marginSummary", {}).get("accountValue", 0))
+        if account_value > 0:
+            return account_value
+    except Exception as e:
+        logger.warning(f"Impossible de lire marginSummary: {e}")
+    # Fallback : solde spot USDC
     spot = info.spot_user_state(address)
     for b in spot.get("balances", []):
         if b["coin"] == "USDC":
