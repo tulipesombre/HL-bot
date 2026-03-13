@@ -42,11 +42,17 @@ open_orders: dict = {}
 
 
 def _clients():
-    pk           = os.environ["HL_PRIVATE_KEY"]
-    account      = eth_account.Account.from_key(pk)
-    # perp_dexs charge les métadonnées HIP-3 — désactivé sur testnet (xyz/cash inexistants)
-    dex_args = {} if _TESTNET else {"perp_dexs": ["xyz", "cash"]}
-    exchange = Exchange(account, base_url=BASE_URL, **dex_args)
+    pk      = os.environ["HL_PRIVATE_KEY"]
+    account = eth_account.Account.from_key(pk)
+    if _TESTNET:
+        # Sur testnet, Exchange.__init__ fetch spot_meta en interne et
+        # spot_meta["tokens"][base] lève IndexError car la liste est plus courte.
+        # Passer spot_meta vide court-circuite ce fetch et évite le crash.
+        exchange = Exchange(account, base_url=BASE_URL,
+                            spot_meta={"tokens": [], "universe": []})
+    else:
+        # perp_dexs charge les métadonnées HIP-3 (xyz/cash) — mainnet uniquement
+        exchange = Exchange(account, base_url=BASE_URL, perp_dexs=["xyz", "cash"])
     info         = Info(base_url=BASE_URL, skip_ws=True)
     main_address = os.environ.get("HL_WALLET_ADDRESS", account.address)
     return exchange, info, main_address
